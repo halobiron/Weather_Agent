@@ -1,0 +1,6 @@
+python-dotenv
+openai
+mcp
+openai-agents
+aiohttp
+mcp_weather_server
