@@ -1,6 +1,7 @@
 import os
 import dotenv
 from agents import Agent, Runner, SQLiteSession, gen_trace_id, trace
+from openai.types.responses import ResponseTextDeltaEvent
 from agents.mcp import MCPServerSse
 from agents.model_settings import ModelSettings
 
@@ -31,7 +32,7 @@ class WeatherAgent:
             model_settings=ModelSettings(tool_choice="required"),
         )
 
-    async def get_response(self, user_message: str) -> str:
+    async def get_response_streamed(self, user_message: str):
         if not self.connected:
             await self.mcp_server.__aenter__()
             self.connected = True
@@ -40,9 +41,10 @@ class WeatherAgent:
         with trace(workflow_name="SmartWeatherPlanner API", trace_id=trace_id):
             print(f"View trace: https://platform.openai.com/traces/trace?trace_id={trace_id}")
 
-            result = await Runner.run(
-                starting_agent=self.agent,
-                input=user_message,
-                session=self.session,
-            )
-            return result.final_output or "(Không có phản hồi)"
+            result = Runner.run_streamed(starting_agent=self.agent,
+                                         input=user_message,
+                                         session=self.session)
+            async for event in result.stream_events():
+                if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                    delta = event.data.delta
+                    yield delta

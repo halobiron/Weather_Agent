@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from mcp_weather import start_mcp_server
 from agent_weather import WeatherAgent
@@ -15,10 +16,9 @@ class AskRequest(BaseModel):
 @app.post("/ask")
 async def ask_weather(req: AskRequest):
     try:
-        reply = await agent.get_response(req.message)
-        return {
-            "user_message": req.message,
-            "agent_reply": reply
-        }
+        return StreamingResponse(
+            agent.get_response_streamed(req.message),
+            media_type="text/event-stream"
+        )
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e)})
