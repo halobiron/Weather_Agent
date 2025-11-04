@@ -12,6 +12,7 @@ if llm == "deepseek":
     llm_model = LitellmModel(model="deepseek/deepseek-chat", api_key=os.getenv("DEEPSEEK_API_KEY"))
 elif llm == "openai":
     llm_model = "gpt-4.1-nano"
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 
 class WeatherAgent:
@@ -21,23 +22,26 @@ class WeatherAgent:
         self.weather_server = MCPServerSse(
             name="MCP Weather SSE",
             params={"url": "http://localhost:4000/sse"},
+            client_session_timeout_seconds=15,
         )
         self.location_server = MCPServerSse(
             name="MCP Location SSE",
             params={"url": "http://localhost:4001/sse"},
+            client_session_timeout_seconds=15,
         )
         self.map_server = MCPServerSse(
             name="OpenStreetMap MCP SSE",
             params={"url": "http://localhost:4002/sse"},
+            client_session_timeout_seconds=15,
         )
 
         self.agent = Agent(
             name="SmartWeatherPlanner",
             instructions=(
                 "Bạn là một trợ lý thời tiết thông minh. "
+                "Trước tiên, luôn dùng MCP Location Server để lấy vị trí hiện tại của người dùng nếu cần. "
                 "Khi người dùng hỏi về thời tiết ở đâu đó, "
-                "hãy dùng MCP Location Server để lấy dữ liệu vị trí nếu cần. "
-                "Sau đó, hãy dùng MCP Weather Server để lấy dữ liệu thời tiết và gợi ý hoạt động phù hợp. "
+                "hãy dùng MCP Weather Server để lấy dữ liệu thời tiết và gợi ý hoạt động phù hợp. "
                 "Bạn cũng có thể sử dụng OpenStreetMap MCP Server để lấy thông tin bản đồ nếu cần. "
                 "Khi cần tìm kiếm địa điểm gần đó, hãy sử dụng NearbySearch MCP server với location từ MCP Location Server. "
                 "Trước khi trả lời về thời tiết của 1 ngày gần đây, "
@@ -46,7 +50,8 @@ class WeatherAgent:
             ),
             model=llm_model,
             mcp_servers=[self.weather_server, self.location_server, self.map_server],
-            model_settings=ModelSettings(tool_choice="required"),
+            model_settings=ModelSettings(tool_choice="required",
+                                        extra_args={"request_timeout": 5000}),
         )
 
     async def get_response_streamed(self, user_message: str):
