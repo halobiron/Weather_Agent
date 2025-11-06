@@ -5,6 +5,7 @@ from openai.types.responses import ResponseTextDeltaEvent
 from agents.mcp import MCPServerSse
 from agents.model_settings import ModelSettings
 from agents.extensions.models.litellm_model import LitellmModel
+from chat_repository import save_chat
 
 dotenv.load_dotenv()
 llm = "deepseek"
@@ -16,8 +17,9 @@ elif llm == "openai":
 
 
 class WeatherAgent:
-    def __init__(self):
-        self.session = SQLiteSession("weather_session")
+    def __init__(self, session_id: str = "weather_session"):
+        self.session_id = session_id
+        self.session = SQLiteSession(f"weather_session_{session_id}")
         self.connected = False 
         self.weather_server = MCPServerSse(
             name="MCP Weather SSE",
@@ -55,11 +57,14 @@ class WeatherAgent:
         )
 
     async def get_response_streamed(self, user_message: str):
+        await save_chat(session_id=self.session_id, role="user", text=user_message)
         if not self.connected:
             await self.weather_server.__aenter__()
             await self.location_server.__aenter__()
             await self.map_server.__aenter__()
             self.connected = True
+        
+        full_response = ""
 
         result = Runner.run_streamed(starting_agent=self.agent,
                                         input=user_message,
@@ -72,4 +77,7 @@ class WeatherAgent:
 
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
                 delta = event.data.delta
+                full_response += delta
                 yield delta
+                
+        await save_chat(session_id=self.session_id, role="assistant", text=full_response)
