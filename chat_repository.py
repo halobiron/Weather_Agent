@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from db import get_db
 
-async def save_chat(session_id: str, role: str, text: str, metadata: Optional[Dict[str, Any]] = None):
+async def save_chat(conversation_id: str, role: str, text: str, metadata: Optional[Dict[str, Any]] = None):
     db = await get_db()
     chat_doc = {
         "chat_id": str(uuid.uuid4()),
-        "session_id": session_id,
+        "conversation_id": conversation_id,
         "role": role,
         "text": text,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -16,9 +16,9 @@ async def save_chat(session_id: str, role: str, text: str, metadata: Optional[Di
     result = await db.chats.insert_one(chat_doc)
     return str(result.inserted_id)
 
-async def get_chats(session_id: str, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
+async def get_chats(conversation_id: str, limit: int = 20, skip: int = 0) -> List[Dict[str, Any]]:
     db = await get_db()
-    cursor = db.chats.find({"session_id": session_id}).skip(skip).limit(limit)
+    cursor = db.chats.find({"conversation_id": conversation_id}).skip(skip).limit(limit)
     return [doc async for doc in cursor]
 
 async def update_chat(chat_id: str, new_text: str = None, new_metadata: Optional[Dict[str, Any]] = None):

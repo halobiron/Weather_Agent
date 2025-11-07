@@ -1,25 +1,19 @@
 import os
-import dotenv
-from agents import Agent, Runner, SQLiteSession
+
+from agents import Agent, Runner, SQLiteSession, function_tool
 from openai.types.responses import ResponseTextDeltaEvent
 from agents.mcp import MCPServerSse
 from agents.model_settings import ModelSettings
-from agents.extensions.models.litellm_model import LitellmModel
-from chat_repository import save_chat
 
-dotenv.load_dotenv()
-llm = "deepseek"
-if llm == "deepseek":
-    llm_model = LitellmModel(model="deepseek/deepseek-chat", api_key=os.getenv("DEEPSEEK_API_KEY"))
-elif llm == "openai":
-    llm_model = "gpt-4.1-nano"
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+from chat_repository import save_chat
+from word_agent import WordAgent
+from config import llm_model
 
 
 class WeatherAgent:
-    def __init__(self, session_id: str = "weather_session"):
-        self.session_id = session_id
-        self.session = SQLiteSession(f"weather_session_{session_id}")
+    def __init__(self, conversation_id: str = None):
+        self.conversation_id = conversation_id or "weather_session_default"
+        self.session = SQLiteSession(f"weather_session_{self.conversation_id}")
         self.connected = False 
         self.weather_server = MCPServerSse(
             name="MCP Weather SSE",
@@ -37,6 +31,8 @@ class WeatherAgent:
             client_session_timeout_seconds=15,
         )
 
+        self.word_agent = WordAgent(self.conversation_id)
+
         self.agent = Agent(
             name="SmartWeatherPlanner",
             instructions=(
@@ -48,20 +44,25 @@ class WeatherAgent:
                 "Khi cần tìm kiếm địa điểm gần đó, hãy sử dụng NearbySearch MCP server với location từ MCP Location Server. "
                 "Trước khi trả lời về thời tiết của 1 ngày gần đây, "
                 "hãy dùng tool 'get_current_datetime' để xác định ngày hôm nay, "
-                "rồi tính đúng ngày dựa trên đó."
+                "rồi tính đúng ngày dựa trên đó. "
+                "Nếu người dùng yêu cầu tạo báo cáo, tài liệu, hoặc file Word, "
+                "hãy sử dụng tool 'generate_word_document' để tạo tài liệu Word chuyên nghiệp."
             ),
             model=llm_model,
             mcp_servers=[self.weather_server, self.location_server, self.map_server],
+            tools=[self.word_agent.agent.as_tool(tool_name="generate_word_document",
+                   tool_description="Tạo tài liệu Word chuyên nghiệp từ prompt của người dùng.")],
             model_settings=ModelSettings(tool_choice="required",
                                         extra_args={"request_timeout": 5000}),
         )
 
     async def get_response_streamed(self, user_message: str):
-        await save_chat(session_id=self.session_id, role="user", text=user_message)
+        await save_chat(conversation_id=self.conversation_id, role="user", text=user_message)
         if not self.connected:
             await self.weather_server.__aenter__()
             await self.location_server.__aenter__()
             await self.map_server.__aenter__()
+            await self.word_agent.__aenter__()
             self.connected = True
         
         full_response = ""
@@ -80,4 +81,4 @@ class WeatherAgent:
                 full_response += delta
                 yield delta
                 
-        await save_chat(session_id=self.session_id, role="assistant", text=full_response)
+        await save_chat(conversation_id=self.conversation_id, role="assistant", text=full_response)

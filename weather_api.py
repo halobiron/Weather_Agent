@@ -11,18 +11,19 @@ app = FastAPI(title="SmartWeatherPlanner API")
 mcp_process = start_mcp_server()
 agents: dict[str, WeatherAgent] = {}
 
-def get_or_create_agent(session_id: str) -> WeatherAgent:
-    if session_id not in agents:
-        agents[session_id] = WeatherAgent(session_id=session_id)
-    return agents[session_id]
+def get_or_create_agent(conversation_id: Optional[str] = None) -> WeatherAgent:
+    key = conversation_id or "default_session"
+    if key not in agents:
+        agents[key] = WeatherAgent(conversation_id=conversation_id)
+    return agents[key]
 
 class AskRequest(BaseModel):
     message: str
-    session_id: Optional[str] = "default_session"
+    conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     chat_id: str
-    session_id: str
+    conversation_id: str
     role: str
     text: str
     timestamp: str
@@ -35,7 +36,7 @@ class ChatUpdateRequest(BaseModel):
 @app.post("/ask")
 async def ask_weather(req: AskRequest):
     try:
-        agent = get_or_create_agent(req.session_id)
+        agent = get_or_create_agent(req.conversation_id)
         return StreamingResponse(
             agent.get_response_streamed(req.message),
             media_type="text/event-stream"
@@ -43,9 +44,9 @@ async def ask_weather(req: AskRequest):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-@app.get("/chats/{session_id}", response_model=List[ChatResponse])
-async def get_session_chats(session_id: str, limit: int = 20, skip: int = 0):
-    chats = await get_chats(session_id, limit=limit, skip=skip)
+@app.get("/chats/{conversation_id}", response_model=List[ChatResponse])
+async def get_session_chats(conversation_id: str, limit: int = 20, skip: int = 0):
+    chats = await get_chats(conversation_id, limit=limit, skip=skip)
     return [ChatResponse(**chat) for chat in chats]
 
 @app.put("/chats/{chat_id}", response_model=dict)

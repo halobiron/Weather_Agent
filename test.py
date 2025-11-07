@@ -1,51 +1,54 @@
 import asyncio
 import aiohttp
-import json
-
+import traceback
 async def demo_unified_system():
-    session_id = "demo_user_2025"
+    conversation_id = "demo_user_2025"
     
     async with aiohttp.ClientSession() as session:
         
         # BƯỚC 1: Hỏi thời tiết qua Weather API
-        # print("\nBƯỚC 1: User hỏi về thời tiết")
-        # print("-" * 70)
+        print("\nBƯỚC 1: User hỏi về thời tiết")
+        print("-" * 70)
         
-        # question = "Thời tiết ở TP.HCM hôm nay thế nào?"
-        # weather_data = {
-        #     "message": question,
-        #     "session_id": session_id
-        # }
+        question = "Thời tiết ở TP.HCM hôm nay thế nào? Xuất nội dung ra file Word chuyên nghiệp."
+        weather_data = {
+            "message": question,
+            "conversation_id": conversation_id
+        }
         
-        # print(f"User: {question}")
-        # print(f"Session ID: {session_id}")
-        # print(f"\nĐang gọi Weather Agent...")
+        print(f"User: {question}")
+        print(f"Session ID: {conversation_id}")
+        print(f"\nĐang gọi Weather Agent...")
         
-        # try:
-        #     async with session.post(
-        #         "http://localhost:8000/ask",
-        #         json=weather_data,
-        #         timeout=aiohttp.ClientTimeout(total=60)
-        #     ) as response:
-        #         if response.status == 200:
-        #             print(f"\nAssistant: ", end='', flush=True)
+        try:
+            timeout = aiohttp.ClientTimeout(total=300, sock_connect=30, sock_read=180)
+            async with session.post(
+                "http://localhost:8000/ask",
+                json=weather_data,
+                timeout=timeout
+            ) as response:
+                if response.status == 200:
+                    print(f"\nAssistant: ", end='', flush=True)
                     
-        #             full_response = ""
-        #             async for chunk in response.content.iter_any():
-        #                 if chunk:
-        #                     text = chunk.decode('utf-8', errors='ignore')
-        #                     full_response += text
-        #                     print(text, end='', flush=True)
+                    full_response = ""
+                    async for chunk in response.content.iter_any():
+                        if chunk:
+                            text = chunk.decode('utf-8', errors='ignore')
+                            full_response += text
+                            print(text, end='', flush=True)
                     
-        #             print(f"\n\nWeather Agent đã trả lời!")
-        #         else:
-        #             print(f"Lỗi: {response.status}")
-        #             return
-        # except Exception as e:
-        #     print(f"Lỗi kết nối Weather API: {e}")
-        #     return
+                    print(f"\n\nWeather Agent đã trả lời!")
+                else:
+                    print(f"Lỗi: {response.status}")
+                    return
+        except Exception as e:
+            
+            error_msg = f"Lỗi kết nối Weather API: {e}"
+            print(error_msg)
+            print(f"Chi tiết lỗi:\n{traceback.format_exc()}")
+            return
         
-        # await asyncio.sleep(1)
+        await asyncio.sleep(1)
         
         # BƯỚC 2: Xem lịch sử qua Weather API
         print("\n\nBƯỚC 2: Xem lịch sử qua Weather API (Chat History Management)")
@@ -55,7 +58,7 @@ async def demo_unified_system():
         chat_id_to_delete = None
         try:
             async with session.get(
-                f"http://localhost:8000/chats/{session_id}"
+                f"http://localhost:8000/chats/{conversation_id}"
             ) as response:
                 if response.status == 200:
                     chats = await response.json()
@@ -72,10 +75,9 @@ async def demo_unified_system():
                         if chat['role'] == 'user' and not chat_id_to_edit:
                             chat_id_to_edit = chat['chat_id']
                             chat_id_to_delete = chat['chat_id']
-                else:
-                    print(f"Lỗi: {response.status}")
         except Exception as e:
             print(f"Lỗi: {e}")
+            print(f"Chi tiết:\n{traceback.format_exc()}")
         
         await asyncio.sleep(1)
         
@@ -101,8 +103,9 @@ async def demo_unified_system():
                     else:
                         error_text = await response.text()
                         print(f"Lỗi {response.status}: {error_text}")
-            except Exception as e:
+            except Exception as e:      
                 print(f"Lỗi: {e}")
+                print(f"Chi tiết:\n{traceback.format_exc()}")
             
             await asyncio.sleep(1)
             
@@ -123,6 +126,7 @@ async def demo_unified_system():
                         print(f"Lỗi {response.status}: {error_text}")
             except Exception as e:
                 print(f"Lỗi: {e}")
+                print(f"Chi tiết:\n{traceback.format_exc()}")
 
             await asyncio.sleep(1)
             
@@ -132,7 +136,7 @@ async def demo_unified_system():
             
             try:
                 async with session.get(
-                    f"http://localhost:8000/chats/{session_id}"
+                    f"http://localhost:8000/chats/{conversation_id}"
                 ) as response:
                     if response.status == 200:
                         chats = await response.json()
@@ -148,6 +152,7 @@ async def demo_unified_system():
                         print(f"Lỗi {response.status}: {error_text}")
             except Exception as e:
                 print(f"Lỗi: {e}")
+                print(f"Chi tiết:\n{traceback.format_exc()}")
         else:
             print("\nKhông tìm thấy chat message nào để edit/delete")
 
