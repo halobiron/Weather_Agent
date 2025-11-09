@@ -75,6 +75,10 @@ class WeatherAgent:
                 print(f"\n🔧 Tool call:")
                 print(f"  Type: {getattr(event.item, 'type', 'N/A')}")
                 print(f"  Output: {getattr(event.item, 'output', 'N/A')}\n")
+                if event.item.type == "tool_call_item":
+                    tool_call = event.item.raw_item
+                    f_name = tool_call.name
+                    print(f"  Tool Name: {f_name}\n")
 
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
                 delta = event.data.delta
